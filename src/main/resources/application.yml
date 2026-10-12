@@ -1,8 +1,27 @@
 spring:
   application:
     name: ms-on-class
+  webflux:
+    base-path: /api/v1
   main:
     web-application-type: reactive
-
+  r2dbc:
+    url: ${DB_URL:r2dbc:postgresql://localhost:5432/on_class_bootcamp}
+    username: ${DB_USERNAME:on_class_bootcamp}
+    password: ${DB_PASSWORD}
+jwt:
+  secret: ${JWT_SECRET:local-dev-secret-change-me-0123456789abcdef}
+  issuer: ${JWT_ISSUER:http://localhost:8081}
+  audience: ${JWT_AUDIENCE:on-class-technology}
+services:
+  capacity:
+    url: ${CAPACITY_SERVICE_URL:http://localhost:8082/api/v1}
+    timeout: ${CAPACITY_SERVICE_TIMEOUT:3s}
 server:
   port: ${SERVER_PORT:8080}
+
+springdoc:
+  swagger-ui:
+    url: ${spring.webflux.base-path}/openapi.yaml
+    path: /swagger-ui.html
+  enable-default-api-docs: false

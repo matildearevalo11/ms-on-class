@@ -1,0 +1,100 @@
+openapi: 3.1.0
+info:
+  title: On-Class Bootcamp API
+  version: 1.0.0
+  description: Microservicio de bootcamps.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /bootcamps:
+    post:
+      operationId: createBootcamp
+      summary: Registrar bootcamp
+      description: Registra un bootcamp con 1 a 4 capacidades existentes. Requiere rol ADMIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootcampRequest'
+      responses:
+        '201':
+          description: Bootcamp registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootcampResponse'
+        '400':
+          description: Datos inválidos o capacidades inexistentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Autenticación requerida.
+        '403':
+          description: Requiere rol ADMIN.
+        '503':
+          description: Servicio de capacidades o base de datos no disponible.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    BootcampRequest:
+      type: object
+      required: [name, description, launchDate, durationDays, capacityIds]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Nombre del bootcamp.
+          example: Desarrollo Backend
+        description:
+          type: string
+          minLength: 1
+          description: Descripción del bootcamp.
+          example: Formación en servicios backend.
+        launchDate:
+          type: string
+          format: date
+          description: Fecha de lanzamiento.
+          example: '2026-11-01'
+        durationDays:
+          type: integer
+          minimum: 1
+          description: Duración en días.
+          example: 90
+        capacityIds:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          description: IDs de capacidades existentes.
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+          example: [1, 2]
+    BootcampResponse:
+      allOf:
+        - $ref: '#/components/schemas/BootcampRequest'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: integer
+              format: int64
+              example: 1
+    ErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: object
+          properties:
+            message:
+              type: string
