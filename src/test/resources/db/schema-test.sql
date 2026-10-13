@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS bootcamps (
     duration_days INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS bootcamp_capacities (
-    bootcamp_id BIGINT NOT NULL REFERENCES bootcamps(id),
+    bootcamp_id BIGINT NOT NULL REFERENCES bootcamps(id) ON DELETE CASCADE,
     capacity_id BIGINT NOT NULL,
     PRIMARY KEY (bootcamp_id, capacity_id)
 );

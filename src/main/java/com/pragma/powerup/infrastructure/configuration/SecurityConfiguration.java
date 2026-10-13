@@ -28,6 +28,7 @@ public class SecurityConfiguration {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/openapi.yaml", "/v3/api-docs", "/v3/api-docs/swagger-config", "/webjars/swagger-ui/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .pathMatchers("/bootcamps").hasRole("ADMIN")
+                        .pathMatchers("/bootcamps/{id}").hasRole("ADMIN")
                         .pathMatchers("/capacities/ids").hasRole("ADMIN")
                         .anyExchange().denyAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(errors).accessDeniedHandler(errors))

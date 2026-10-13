@@ -5,4 +5,5 @@ import reactor.core.publisher.Mono;
 
 public interface IBootcampServicePort {
     Mono<Bootcamp> createBootcamp(Bootcamp bootcamp);
+    Mono<Void> deleteBootcamp(Long id);
 }

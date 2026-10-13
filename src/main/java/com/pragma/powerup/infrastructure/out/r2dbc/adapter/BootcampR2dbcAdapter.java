@@ -17,6 +17,26 @@ public class BootcampR2dbcAdapter implements IBootcampPersistencePort {
     private final DatabaseClient database;
 
     @Override
+    public Mono<Boolean> existsById(Long id) {
+        return repository.existsById(id);
+    }
+
+    @Override
+    public Flux<Long> findExclusiveCapacityIds(Long bootcampId) {
+        return database.sql("SELECT bc.capacity_id FROM bootcamp_capacities bc "
+                        + "WHERE bc.bootcamp_id = :bootcampId AND NOT EXISTS ("
+                        + "SELECT 1 FROM bootcamp_capacities other "
+                        + "WHERE other.capacity_id = bc.capacity_id AND other.bootcamp_id <> :bootcampId)")
+                .bind("bootcampId", bootcampId)
+                .map((row, metadata) -> row.get("capacity_id", Long.class)).all();
+    }
+
+    @Override
+    public Mono<Void> deleteById(Long id) {
+        return repository.deleteById(id);
+    }
+
+    @Override
     public Mono<Bootcamp> save(Bootcamp bootcamp) {
         var entity = new BootcampEntity(null, bootcamp.getName(), bootcamp.getDescription(),
                 bootcamp.getLaunchDate(), bootcamp.getDurationDays());
