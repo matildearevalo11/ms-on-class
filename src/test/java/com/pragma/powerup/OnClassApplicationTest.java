@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.pragma.powerup.infrastructure.out.r2dbc.repository.IBootcampRepository;
+import com.pragma.powerup.infrastructure.out.r2dbc.entity.BootcampEntity;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OnClassApplicationTest {
     private static final AtomicInteger REMOTE_STATUS = new AtomicInteger(200);
     private static final AtomicInteger REMOTE_CALLS = new AtomicInteger();
+    private static final AtomicInteger DETAIL_CALLS = new AtomicInteger();
+    private static final AtomicReference<String> DETAIL_AUTHORIZATION = new AtomicReference<>();
     private static final AtomicBoolean OMIT_LAST_ID = new AtomicBoolean();
     private static final AtomicReference<String> REMOTE_AUTHORIZATION = new AtomicReference<>();
     private static final HttpServer REMOTE = startServer();
@@ -68,6 +72,20 @@ class OnClassApplicationTest {
                 }
                 exchange.close();
             });
+            server.createContext("/api/v1/capacities/details", exchange -> {
+                DETAIL_CALLS.incrementAndGet();
+                DETAIL_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                String ids = exchange.getRequestURI().getRawQuery().replace("ids=", "");
+                String details = java.util.Arrays.stream(ids.split(","))
+                        .map(id -> "{\"id\":" + id + ",\"name\":\"Capacity " + id
+                                + "\",\"technologies\":[{\"id\":7,\"name\":\"Java\"}]}")
+                        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                byte[] body = details.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
             server.start();
             return server;
         } catch (IOException exception) {
@@ -89,7 +107,68 @@ class OnClassApplicationTest {
                 .then(repository.deleteAll())).verifyComplete();
         REMOTE_STATUS.set(200);
         REMOTE_CALLS.set(0);
+        DETAIL_CALLS.set(0);
         OMIT_LAST_ID.set(false);
+    }
+
+    @Test
+    void listsPagesOrderedByNameOrCapacityCountWithNestedTechnologies() {
+        insert("Alpha", List.of(1L));
+        insert("Beta", List.of(2L, 3L, 4L));
+        insert("Gamma", List.of(5L, 6L));
+        String adminToken = token("ADMIN");
+
+        client.get().uri("/bootcamps?page=0&size=2&sortBy=capacityCount&direction=desc")
+                .headers(headers -> headers.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.totalElements").isEqualTo(3)
+                .jsonPath("$.totalPages").isEqualTo(2)
+                .jsonPath("$.content[0].name").isEqualTo("Beta")
+                .jsonPath("$.content[1].name").isEqualTo("Gamma")
+                .jsonPath("$.content[0].capacities.length()").isEqualTo(3)
+                .jsonPath("$.content[0].capacities[0].name").isEqualTo("Capacity 2")
+                .jsonPath("$.content[0].capacities[0].technologies[0].name").isEqualTo("Java");
+        assertThat(DETAIL_CALLS.get()).isEqualTo(1);
+        assertThat(DETAIL_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+
+        client.get().uri("/bootcamps?page=1&size=2&sortBy=name&direction=desc")
+                .headers(headers -> headers.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.content.length()").isEqualTo(1)
+                .jsonPath("$.content[0].name").isEqualTo("Alpha");
+        client.get().uri("/bootcamps?page=0&size=1&sortBy=name&direction=asc")
+                .headers(headers -> headers.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.content[0].name").isEqualTo("Alpha");
+        client.get().uri("/bootcamps?page=0&size=3&sortBy=capacityCount&direction=asc")
+                .headers(headers -> headers.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.content[0].name").isEqualTo("Alpha")
+                .jsonPath("$.content[1].name").isEqualTo("Gamma")
+                .jsonPath("$.content[2].name").isEqualTo("Beta");
+    }
+
+    @Test
+    void validatesListParametersAndAdminRole() {
+        client.get().uri("/bootcamps?size=0").headers(headers -> headers.setBearerAuth(token("ADMIN")))
+                .exchange().expectStatus().isBadRequest();
+        client.get().uri("/bootcamps?sortBy=other").headers(headers -> headers.setBearerAuth(token("ADMIN")))
+                .exchange().expectStatus().isBadRequest();
+        client.get().uri("/bootcamps").headers(headers -> headers.setBearerAuth(token("PERSON")))
+                .exchange().expectStatus().isForbidden();
+        client.get().uri("/bootcamps").exchange().expectStatus().isUnauthorized();
+        assertThat(DETAIL_CALLS.get()).isZero();
+    }
+
+    private void insert(String name, List<Long> capacityIds) {
+        var saved = repository.save(new BootcampEntity(null, name, "Description", LocalDate.of(2026, 11, 1), 90))
+                .block();
+        assertThat(saved).isNotNull();
+        for (Long capacityId : capacityIds) {
+            database.sql("INSERT INTO bootcamp_capacities (bootcamp_id, capacity_id) VALUES (:bootcampId, :capacityId)")
+                    .bind("bootcampId", saved.getId()).bind("capacityId", capacityId)
+                    .fetch().rowsUpdated().block();
+        }
     }
 
     @Test

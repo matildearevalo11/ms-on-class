@@ -9,6 +9,55 @@ security:
   - bearerAuth: []
 paths:
   /bootcamps:
+    get:
+      operationId: listBootcamps
+      summary: Listar bootcamps
+      description: Lista bootcamps con capacidades y tecnologías. Requiere rol ADMIN.
+      parameters:
+        - name: page
+          in: query
+          description: Página desde cero.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Elementos por página.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: sortBy
+          in: query
+          description: Campo de orden.
+          schema:
+            type: string
+            enum: [name, capacityCount]
+            default: name
+        - name: direction
+          in: query
+          description: Dirección de orden.
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Página de bootcamps.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootcampPage'
+        '400':
+          description: Parámetros inválidos.
+        '401':
+          description: Autenticación requerida.
+        '403':
+          description: Requiere rol ADMIN.
+        '503':
+          description: Servicio de capacidades o base de datos no disponible.
     post:
       operationId: createBootcamp
       summary: Registrar bootcamp
@@ -45,6 +94,66 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    TechnologySummary:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+    CapacityDetail:
+      type: object
+      required: [id, name, technologies]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        technologies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnologySummary'
+    BootcampListItem:
+      type: object
+      required: [id, name, description, launchDate, durationDays, capacities]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        description:
+          type: string
+        launchDate:
+          type: string
+          format: date
+        durationDays:
+          type: integer
+        capacities:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapacityDetail'
+    BootcampPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/BootcampListItem'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int64
     BootcampRequest:
       type: object
       required: [name, description, launchDate, durationDays, capacityIds]
