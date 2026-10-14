@@ -7,11 +7,24 @@ import com.pragma.powerup.domain.usecase.BootcampListUseCase;
 import com.pragma.powerup.domain.spi.IBootcampPersistencePort;
 import com.pragma.powerup.domain.spi.ICapacityQueryPort;
 import com.pragma.powerup.domain.usecase.BootcampUseCase;
+import com.pragma.powerup.domain.api.IEnrollmentServicePort;
+import com.pragma.powerup.domain.spi.IEnrollmentPersistencePort;
+import com.pragma.powerup.domain.usecase.EnrollmentUseCase;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class BeanConfiguration {
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
+    IEnrollmentServicePort enrollmentServicePort(IEnrollmentPersistencePort persistencePort, Clock clock) {
+        return new EnrollmentUseCase(persistencePort, clock);
+    }
     @Bean
     IBootcampListServicePort bootcampListServicePort(IBootcampQueryPort bootcampPort,
             ICapacityQueryPort capacityPort) {

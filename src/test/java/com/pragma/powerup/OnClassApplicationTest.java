@@ -114,7 +114,8 @@ class OnClassApplicationTest {
 
     @org.junit.jupiter.api.BeforeEach
     void reset() {
-        StepVerifier.create(database.sql("DELETE FROM bootcamp_capacities").fetch().rowsUpdated()
+        StepVerifier.create(database.sql("DELETE FROM bootcamp_enrollments").fetch().rowsUpdated()
+                .then(database.sql("DELETE FROM bootcamp_capacities").fetch().rowsUpdated())
                 .then(repository.deleteAll())).verifyComplete();
         REMOTE_STATUS.set(200);
         REMOTE_CALLS.set(0);
@@ -122,6 +123,50 @@ class OnClassApplicationTest {
         DELETE_STATUS.set(204);
         DELETE_CALLS.set(0);
         OMIT_LAST_ID.set(false);
+    }
+
+    @Test
+    void enrollsAuthenticatedPersonWithoutDuplicateOrOverlappingSchedules() {
+        LocalDate start = LocalDate.now().plusDays(10);
+        Long first = insertEnrollmentBootcamp("First", start, 5);
+        Long adjacent = insertEnrollmentBootcamp("Adjacent", start.plusDays(5), 5);
+        Long overlapping = insertEnrollmentBootcamp("Overlapping", start.plusDays(4), 5);
+        String personToken = token("PERSON");
+
+        enroll(first, personToken).expectStatus().isCreated();
+        enroll(first, personToken).expectStatus().isEqualTo(409);
+        enroll(overlapping, personToken).expectStatus().isEqualTo(409);
+        enroll(adjacent, personToken).expectStatus().isCreated();
+        enroll(first, token("PERSON", "2")).expectStatus().isCreated();
+        enroll(first, token("ADMIN")).expectStatus().isForbidden();
+        client.post().uri("/bootcamps/" + first + "/enrollments").exchange().expectStatus().isUnauthorized();
+        enroll(Long.MAX_VALUE, personToken).expectStatus().isNotFound();
+
+        Long count = database.sql("SELECT COUNT(*) AS total FROM bootcamp_enrollments")
+                .map((row, metadata) -> row.get("total", Long.class)).one().block();
+        assertThat(count).isEqualTo(3L);
+    }
+
+    @Test
+    void limitsFiveFutureEnrollmentsButExcludesFinishedBootcamps() {
+        String personToken = token("PERSON");
+        Long past = insertEnrollmentBootcamp("Past", LocalDate.now().minusDays(20), 2);
+        enroll(past, personToken).expectStatus().isCreated();
+        for (int index = 0; index < 5; index++) {
+            Long id = insertEnrollmentBootcamp("Future " + index, LocalDate.now().plusDays(10 + index * 10), 3);
+            enroll(id, personToken).expectStatus().isCreated();
+        }
+        Long sixth = insertEnrollmentBootcamp("Sixth", LocalDate.now().plusDays(70), 3);
+        enroll(sixth, personToken).expectStatus().isEqualTo(409);
+    }
+
+    private Long insertEnrollmentBootcamp(String name, LocalDate date, int durationDays) {
+        return repository.save(new BootcampEntity(null, name, "Description", date, durationDays)).block().getId();
+    }
+
+    private WebTestClient.ResponseSpec enroll(Long bootcampId, String jwt) {
+        return client.post().uri("/bootcamps/" + bootcampId + "/enrollments")
+                .headers(headers -> headers.setBearerAuth(jwt)).exchange();
     }
 
     @Test
@@ -263,11 +308,15 @@ class OnClassApplicationTest {
     }
 
     private String token(String role) {
+        return token(role, "1");
+    }
+
+    private String token(String role, String personId) {
         String secret = "test-only-secret-not-for-deployment-1234567890";
         var encoder = new NimbusJwtEncoder(new ImmutableSecret<>(
                 new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256")));
         Instant now = Instant.now();
-        var claims = JwtClaimsSet.builder().issuer("http://localhost:8081").subject("1")
+        var claims = JwtClaimsSet.builder().issuer("http://localhost:8081").subject(personId)
                 .audience(List.of("on-class-technology")).issuedAt(now).expiresAt(now.plusSeconds(300))
                 .claim("role", role).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))

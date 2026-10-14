@@ -8,6 +8,37 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /bootcamps/{id}/enrollments:
+    post:
+      operationId: enrollInBootcamp
+      summary: Inscribirse en un bootcamp
+      description: Inscribe a la persona del token en un bootcamp sin cruce de fechas y con máximo cinco inscripciones vigentes. Requiere rol PERSON.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del bootcamp.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '201':
+          description: Inscripción creada.
+        '401':
+          description: Autenticación requerida.
+        '403':
+          description: Requiere rol PERSON.
+        '404':
+          description: Bootcamp inexistente.
+        '409':
+          description: Inscripción repetida, cruce de fechas o límite alcanzado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Base de datos no disponible.
   /bootcamps/{id}:
     delete:
       operationId: deleteBootcamp
