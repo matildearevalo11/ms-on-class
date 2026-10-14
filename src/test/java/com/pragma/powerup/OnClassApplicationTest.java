@@ -48,6 +48,8 @@ class OnClassApplicationTest {
     private static final AtomicReference<String> DELETE_QUERY = new AtomicReference<>();
     private static final AtomicReference<String> DELETE_AUTHORIZATION = new AtomicReference<>();
     private static final AtomicReference<String> DETAIL_AUTHORIZATION = new AtomicReference<>();
+    private static final AtomicReference<String> PERSON_AUTHORIZATION = new AtomicReference<>();
+    private static final AtomicInteger PERSON_STATUS = new AtomicInteger(200);
     private static final AtomicBoolean OMIT_LAST_ID = new AtomicBoolean();
     private static final AtomicReference<String> REMOTE_AUTHORIZATION = new AtomicReference<>();
     private static final AtomicInteger REPORT_STATUS = new AtomicInteger(204);
@@ -112,6 +114,25 @@ class OnClassApplicationTest {
                 exchange.sendResponseHeaders(DELETE_STATUS.get(), -1);
                 exchange.close();
             });
+            server.createContext("/api/v1/persons", exchange -> {
+                PERSON_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                int status = PERSON_STATUS.get();
+                if (status != 200) {
+                    exchange.sendResponseHeaders(status, -1);
+                    exchange.close();
+                    return;
+                }
+                String ids = exchange.getRequestURI().getRawQuery().replace("ids=", "");
+                String details = java.util.Arrays.stream(ids.split(","))
+                        .map(id -> "{\"id\":" + id + ",\"name\":\"Person " + id
+                                + "\",\"email\":\"person" + id + "@example.com\"}")
+                        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                byte[] body = details.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
             server.createContext("/api/v1/internal/bootcamp-reports", exchange -> {
                 REPORT_CALLS.incrementAndGet();
                 REPORT_TOKEN.set(exchange.getRequestHeaders().getFirst("X-Internal-Token"));
@@ -130,6 +151,7 @@ class OnClassApplicationTest {
     static void capacityUrl(DynamicPropertyRegistry registry) {
         registry.add("services.capacity.url", () -> "http://127.0.0.1:" + REMOTE.getAddress().getPort() + "/api/v1");
         registry.add("services.report.url", () -> "http://127.0.0.1:" + REMOTE.getAddress().getPort() + "/api/v1");
+        registry.add("services.person.url", () -> "http://127.0.0.1:" + REMOTE.getAddress().getPort() + "/api/v1");
     }
 
     @org.junit.jupiter.api.AfterAll
@@ -149,6 +171,51 @@ class OnClassApplicationTest {
         OMIT_LAST_ID.set(false);
         REPORT_STATUS.set(204);
         REPORT_CALLS.set(0);
+        PERSON_STATUS.set(200);
+        PERSON_AUTHORIZATION.set(null);
+    }
+
+    @Test
+    void showsMostEnrolledBootcampWithPersonsCapacitiesAndTechnologies() {
+        Long lessPopular = insert("Less popular", List.of(3L));
+        Long winner = insert("Most popular", List.of(1L, 2L));
+        enrollDirectly(lessPopular, 3L);
+        enrollDirectly(winner, 1L);
+        enrollDirectly(winner, 2L);
+        String adminToken = token("ADMIN");
+
+        client.get().uri("/bootcamps/most-enrolled")
+                .headers(headers -> headers.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.id").isEqualTo(winner.intValue())
+                .jsonPath("$.name").isEqualTo("Most popular")
+                .jsonPath("$.description").isEqualTo("Description")
+                .jsonPath("$.launchDate").isEqualTo("2026-11-01")
+                .jsonPath("$.durationDays").isEqualTo(90)
+                .jsonPath("$.personCount").isEqualTo(2)
+                .jsonPath("$.persons[0].name").isEqualTo("Person 1")
+                .jsonPath("$.persons[1].email").isEqualTo("person2@example.com")
+                .jsonPath("$.capacities[0].name").isEqualTo("Capacity 1")
+                .jsonPath("$.capacities[1].technologies[0].name").isEqualTo("Java");
+        assertThat(PERSON_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+        assertThat(DETAIL_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+    }
+
+    @Test
+    void restrictsPopularityQueryAndReportsMissingBootcamps() {
+        client.get().uri("/bootcamps/most-enrolled").exchange().expectStatus().isUnauthorized();
+        client.get().uri("/bootcamps/most-enrolled")
+                .headers(headers -> headers.setBearerAuth(token("PERSON")))
+                .exchange().expectStatus().isForbidden();
+        client.get().uri("/bootcamps/most-enrolled")
+                .headers(headers -> headers.setBearerAuth(token("ADMIN")))
+                .exchange().expectStatus().isNotFound();
+    }
+
+    private void enrollDirectly(Long bootcampId, Long personId) {
+        database.sql("INSERT INTO bootcamp_enrollments (bootcamp_id, person_id) VALUES (:bootcampId, :personId)")
+                .bind("bootcampId", bootcampId).bind("personId", personId)
+                .fetch().rowsUpdated().block();
     }
 
     @Test
