@@ -29,9 +29,9 @@ class BootcampUseCaseTest {
 
         StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
                 .verifyComplete();
-        var order = inOrder(capacities, persistence);
-        order.verify(capacities).deleteCapacities(List.of(1L));
+        var order = inOrder(persistence, capacities);
         order.verify(persistence).deleteById(7L);
+        order.verify(capacities).deleteCapacities(List.of(1L));
     }
 
     @Test
@@ -49,17 +49,33 @@ class BootcampUseCaseTest {
     }
 
     @Test
-    void doesNotDeleteBootcampWhenCapacityCleanupFails() {
+    void propagatesCapacityCleanupFailureSoTheLocalDeletionIsRolledBack() {
         var persistence = mock(IBootcampPersistencePort.class);
         var capacities = mock(ICapacityQueryPort.class);
         when(persistence.existsById(7L)).thenReturn(Mono.just(true));
         when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Flux.just(1L));
+        when(persistence.deleteById(7L)).thenReturn(Mono.empty());
         when(capacities.deleteCapacities(List.of(1L)))
                 .thenReturn(Mono.error(new IllegalStateException("Unavailable")));
 
         StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
                 .expectError(IllegalStateException.class).verify();
-        verify(persistence, never()).deleteById(7L);
+        var order = inOrder(persistence, capacities);
+        order.verify(persistence).deleteById(7L);
+        order.verify(capacities).deleteCapacities(List.of(1L));
+    }
+
+    @Test
+    void doesNotCallCapacityServiceWhenLocalDeletionFails() {
+        var persistence = mock(IBootcampPersistencePort.class);
+        var capacities = mock(ICapacityQueryPort.class);
+        when(persistence.existsById(7L)).thenReturn(Mono.just(true));
+        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Flux.just(1L));
+        when(persistence.deleteById(7L)).thenReturn(Mono.error(new IllegalStateException("Database down")));
+
+        StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
+                .expectError(IllegalStateException.class).verify();
+        verifyNoInteractions(capacities);
     }
 
     @Test
