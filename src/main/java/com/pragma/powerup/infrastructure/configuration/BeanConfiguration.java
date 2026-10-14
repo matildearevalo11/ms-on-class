@@ -14,12 +14,21 @@ import com.pragma.powerup.domain.api.IReportDeliveryServicePort;
 import com.pragma.powerup.domain.spi.IReportDeliveryPort;
 import com.pragma.powerup.domain.spi.IReportOutboxPort;
 import com.pragma.powerup.domain.usecase.ReportDeliveryUseCase;
+import com.pragma.powerup.domain.api.IBootcampPopularityServicePort;
+import com.pragma.powerup.domain.spi.IBootcampPopularityQueryPort;
+import com.pragma.powerup.domain.spi.IPersonQueryPort;
+import com.pragma.powerup.domain.usecase.BootcampPopularityUseCase;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class BeanConfiguration {
+    @Bean
+    IBootcampPopularityServicePort bootcampPopularityServicePort(IBootcampPopularityQueryPort bootcamps,
+            ICapacityQueryPort capacities, IPersonQueryPort persons) {
+        return new BootcampPopularityUseCase(bootcamps, capacities, persons);
+    }
     @Bean
     Clock clock() {
         return Clock.systemUTC();

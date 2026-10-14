@@ -10,6 +10,7 @@ public enum ExceptionMessages {
     CAPACITIES_NOT_FOUND("One or more capacities do not exist."),
     CAPACITY_SERVICE_UNAVAILABLE("The capacity service is unavailable."),
     CAPACITY_DETAILS_UNAVAILABLE("One or more associated capacities could not be loaded."),
+    PERSON_DETAILS_UNAVAILABLE("One or more enrolled persons could not be loaded."),
     BOOTCAMP_NOT_FOUND("The bootcamp does not exist."),
     ALREADY_ENROLLED("The person is already enrolled in this bootcamp."),
     ENROLLMENT_OVERLAP("The bootcamp overlaps another enrollment."),
