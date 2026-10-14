@@ -72,6 +72,8 @@ public class CapacityQueryRestAdapter implements ICapacityQueryPort {
                                 .build())
                         .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                         .retrieve()
+                        .onStatus(HttpStatusCode::is4xxClientError,
+                                response -> Mono.just(new ValidationException(ExceptionMessages.CAPACITIES_NOT_FOUND.getMessage())))
                         .bodyToFlux(CapacityDetailResponseDto.class).collectList())
                 .timeout(timeout)
                 .onErrorMap(error -> error instanceof WebClientException || error instanceof TimeoutException,

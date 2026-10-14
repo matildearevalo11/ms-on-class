@@ -8,6 +8,26 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /bootcamps/most-enrolled:
+    get:
+      operationId: getMostEnrolledBootcamp
+      summary: Mostrar el bootcamp con más personas inscritas
+      description: Incluye personas, capacidades y tecnologías. Requiere rol ADMIN.
+      responses:
+        '200':
+          description: Bootcamp con más personas inscritas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MostEnrolledBootcamp'
+        '401':
+          description: Autenticación requerida.
+        '403':
+          description: Requiere rol ADMIN.
+        '404':
+          description: No hay bootcamps registrados.
+        '503':
+          description: Servicio dependiente o base de datos no disponible.
   /bootcamps/{id}/enrollments:
     post:
       operationId: enrollInBootcamp
@@ -210,6 +230,31 @@ components:
         totalPages:
           type: integer
           format: int64
+    PersonSummary:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+    MostEnrolledBootcamp:
+      allOf:
+        - $ref: '#/components/schemas/BootcampListItem'
+        - type: object
+          required: [personCount, persons]
+          properties:
+            personCount:
+              type: integer
+              minimum: 0
+            persons:
+              type: array
+              items:
+                $ref: '#/components/schemas/PersonSummary'
     BootcampRequest:
       type: object
       required: [name, description, launchDate, durationDays, capacityIds]

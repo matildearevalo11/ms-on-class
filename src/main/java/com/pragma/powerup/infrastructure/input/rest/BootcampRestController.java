@@ -7,6 +7,8 @@ import com.pragma.powerup.application.dto.response.BootcampPageResponseDto;
 import com.pragma.powerup.application.handler.IBootcampListHandler;
 import com.pragma.powerup.application.handler.IBootcampHandler;
 import com.pragma.powerup.application.handler.IEnrollmentHandler;
+import com.pragma.powerup.application.handler.IBootcampPopularityHandler;
+import com.pragma.powerup.application.dto.response.MostEnrolledBootcampResponseDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,12 @@ public class BootcampRestController {
     private final IBootcampHandler handler;
     private final IBootcampListHandler listHandler;
     private final IEnrollmentHandler enrollmentHandler;
+    private final IBootcampPopularityHandler popularityHandler;
+
+    @GetMapping(value = "/most-enrolled", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<MostEnrolledBootcampResponseDto> findMostEnrolled() {
+        return popularityHandler.findMostEnrolled();
+    }
 
     @PostMapping("/{id}/enrollments")
     @ResponseStatus(HttpStatus.CREATED)

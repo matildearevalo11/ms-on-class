@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.pragma.powerup.infrastructure.out.r2dbc.repository.IBootcampRepository;
+import com.pragma.powerup.domain.api.IReportDeliveryServicePort;
 import com.pragma.powerup.infrastructure.out.r2dbc.entity.BootcampEntity;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -47,13 +48,20 @@ class OnClassApplicationTest {
     private static final AtomicReference<String> DELETE_QUERY = new AtomicReference<>();
     private static final AtomicReference<String> DELETE_AUTHORIZATION = new AtomicReference<>();
     private static final AtomicReference<String> DETAIL_AUTHORIZATION = new AtomicReference<>();
+    private static final AtomicReference<String> PERSON_AUTHORIZATION = new AtomicReference<>();
+    private static final AtomicInteger PERSON_STATUS = new AtomicInteger(200);
     private static final AtomicBoolean OMIT_LAST_ID = new AtomicBoolean();
     private static final AtomicReference<String> REMOTE_AUTHORIZATION = new AtomicReference<>();
+    private static final AtomicInteger REPORT_STATUS = new AtomicInteger(204);
+    private static final AtomicInteger REPORT_CALLS = new AtomicInteger();
+    private static final AtomicReference<String> REPORT_TOKEN = new AtomicReference<>();
+    private static final AtomicReference<String> REPORT_BODY = new AtomicReference<>();
     private static final HttpServer REMOTE = startServer();
     @Autowired
     private WebTestClient client;
     @Autowired private IBootcampRepository repository;
     @Autowired private DatabaseClient database;
+    @Autowired private IReportDeliveryServicePort reportDelivery;
 
     private static HttpServer startServer() {
         try {
@@ -79,7 +87,16 @@ class OnClassApplicationTest {
             server.createContext("/api/v1/capacities/details", exchange -> {
                 DETAIL_CALLS.incrementAndGet();
                 DETAIL_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                int status = REMOTE_STATUS.get();
+                if (status != 200) {
+                    exchange.sendResponseHeaders(status, -1);
+                    exchange.close();
+                    return;
+                }
                 String ids = exchange.getRequestURI().getRawQuery().replace("ids=", "");
+                if (OMIT_LAST_ID.get()) {
+                    ids = ids.split(",")[0];
+                }
                 String details = java.util.Arrays.stream(ids.split(","))
                         .map(id -> "{\"id\":" + id + ",\"name\":\"Capacity " + id
                                 + "\",\"technologies\":[{\"id\":7,\"name\":\"Java\"}]}")
@@ -97,6 +114,32 @@ class OnClassApplicationTest {
                 exchange.sendResponseHeaders(DELETE_STATUS.get(), -1);
                 exchange.close();
             });
+            server.createContext("/api/v1/persons", exchange -> {
+                PERSON_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                int status = PERSON_STATUS.get();
+                if (status != 200) {
+                    exchange.sendResponseHeaders(status, -1);
+                    exchange.close();
+                    return;
+                }
+                String ids = exchange.getRequestURI().getRawQuery().replace("ids=", "");
+                String details = java.util.Arrays.stream(ids.split(","))
+                        .map(id -> "{\"id\":" + id + ",\"name\":\"Person " + id
+                                + "\",\"email\":\"person" + id + "@example.com\"}")
+                        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                byte[] body = details.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
+            server.createContext("/api/v1/internal/bootcamp-reports", exchange -> {
+                REPORT_CALLS.incrementAndGet();
+                REPORT_TOKEN.set(exchange.getRequestHeaders().getFirst("X-Internal-Token"));
+                REPORT_BODY.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                exchange.sendResponseHeaders(REPORT_STATUS.get(), -1);
+                exchange.close();
+            });
             server.start();
             return server;
         } catch (IOException exception) {
@@ -107,6 +150,8 @@ class OnClassApplicationTest {
     @DynamicPropertySource
     static void capacityUrl(DynamicPropertyRegistry registry) {
         registry.add("services.capacity.url", () -> "http://127.0.0.1:" + REMOTE.getAddress().getPort() + "/api/v1");
+        registry.add("services.report.url", () -> "http://127.0.0.1:" + REMOTE.getAddress().getPort() + "/api/v1");
+        registry.add("services.person.url", () -> "http://127.0.0.1:" + REMOTE.getAddress().getPort() + "/api/v1");
     }
 
     @org.junit.jupiter.api.AfterAll
@@ -115,6 +160,7 @@ class OnClassApplicationTest {
     @org.junit.jupiter.api.BeforeEach
     void reset() {
         StepVerifier.create(database.sql("DELETE FROM bootcamp_enrollments").fetch().rowsUpdated()
+                .then(database.sql("DELETE FROM report_outbox").fetch().rowsUpdated())
                 .then(database.sql("DELETE FROM bootcamp_capacities").fetch().rowsUpdated())
                 .then(repository.deleteAll())).verifyComplete();
         REMOTE_STATUS.set(200);
@@ -123,6 +169,76 @@ class OnClassApplicationTest {
         DELETE_STATUS.set(204);
         DELETE_CALLS.set(0);
         OMIT_LAST_ID.set(false);
+        REPORT_STATUS.set(204);
+        REPORT_CALLS.set(0);
+        PERSON_STATUS.set(200);
+        PERSON_AUTHORIZATION.set(null);
+    }
+
+    @Test
+    void showsMostEnrolledBootcampWithPersonsCapacitiesAndTechnologies() {
+        Long lessPopular = insert("Less popular", List.of(3L));
+        Long winner = insert("Most popular", List.of(1L, 2L));
+        enrollDirectly(lessPopular, 3L);
+        enrollDirectly(winner, 1L);
+        enrollDirectly(winner, 2L);
+        String adminToken = token("ADMIN");
+
+        client.get().uri("/bootcamps/most-enrolled")
+                .headers(headers -> headers.setBearerAuth(adminToken)).exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.id").isEqualTo(winner.intValue())
+                .jsonPath("$.name").isEqualTo("Most popular")
+                .jsonPath("$.description").isEqualTo("Description")
+                .jsonPath("$.launchDate").isEqualTo("2026-11-01")
+                .jsonPath("$.durationDays").isEqualTo(90)
+                .jsonPath("$.personCount").isEqualTo(2)
+                .jsonPath("$.persons[0].name").isEqualTo("Person 1")
+                .jsonPath("$.persons[1].email").isEqualTo("person2@example.com")
+                .jsonPath("$.capacities[0].name").isEqualTo("Capacity 1")
+                .jsonPath("$.capacities[1].technologies[0].name").isEqualTo("Java");
+        assertThat(PERSON_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+        assertThat(DETAIL_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+    }
+
+    @Test
+    void restrictsPopularityQueryAndReportsMissingBootcamps() {
+        client.get().uri("/bootcamps/most-enrolled").exchange().expectStatus().isUnauthorized();
+        client.get().uri("/bootcamps/most-enrolled")
+                .headers(headers -> headers.setBearerAuth(token("PERSON")))
+                .exchange().expectStatus().isForbidden();
+        client.get().uri("/bootcamps/most-enrolled")
+                .headers(headers -> headers.setBearerAuth(token("ADMIN")))
+                .exchange().expectStatus().isNotFound();
+    }
+
+    private void enrollDirectly(Long bootcampId, Long personId) {
+        database.sql("INSERT INTO bootcamp_enrollments (bootcamp_id, person_id) VALUES (:bootcampId, :personId)")
+                .bind("bootcampId", bootcampId).bind("personId", personId)
+                .fetch().rowsUpdated().block();
+    }
+
+    @Test
+    void retriesReportDeliveryWithoutDelayingBootcampRegistration() {
+        String adminToken = token("ADMIN");
+        REPORT_STATUS.set(503);
+        post(adminToken, List.of(1L)).expectStatus().isCreated();
+        assertThat(REPORT_CALLS.get()).isZero();
+
+        StepVerifier.create(reportDelivery.deliverPending(10)).expectError().verify();
+        Long pending = database.sql("SELECT COUNT(*) AS total FROM report_outbox WHERE delivered_at IS NULL")
+                .map((row, metadata) -> row.get("total", Long.class)).one().block();
+        assertThat(pending).isEqualTo(1L);
+
+        REPORT_STATUS.set(204);
+        StepVerifier.create(reportDelivery.deliverPending(10)).verifyComplete();
+        StepVerifier.create(reportDelivery.deliverPending(10)).verifyComplete();
+        assertThat(REPORT_CALLS.get()).isEqualTo(2);
+        assertThat(REPORT_TOKEN.get()).isEqualTo("local-dev-report-secret-change-me");
+        assertThat(REPORT_BODY.get()).startsWith("{").contains("\"bootcampId\"", "\"personCount\":0");
+        Long remaining = database.sql("SELECT COUNT(*) AS total FROM report_outbox WHERE delivered_at IS NULL")
+                .map((row, metadata) -> row.get("total", Long.class)).one().block();
+        assertThat(remaining).isZero();
     }
 
     @Test
@@ -271,8 +387,12 @@ class OnClassApplicationTest {
         Long associations = database.sql("SELECT COUNT(*) AS total FROM bootcamp_capacities")
                 .map((row, metadata) -> row.get("total", Long.class)).one().block();
         assertThat(associations).isEqualTo(5L);
-        assertThat(REMOTE_CALLS.get()).isEqualTo(2);
-        assertThat(REMOTE_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+        assertThat(DETAIL_CALLS.get()).isEqualTo(2);
+        assertThat(DETAIL_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+        String payload = database.sql("SELECT payload FROM report_outbox ORDER BY id LIMIT 1")
+                .map((row, metadata) -> row.get("payload", String.class)).one().block();
+        assertThat(payload).contains("\"name\":\"Backend\"", "\"capacityCount\":1",
+                "\"technologyCount\":1", "\"personCount\":0", "\"technologies\"");
     }
 
     @Test
@@ -280,7 +400,7 @@ class OnClassApplicationTest {
         post(token("ADMIN"), List.of()).expectStatus().isBadRequest();
         post(token("ADMIN"), List.of(1L, 1L)).expectStatus().isBadRequest();
         post(token("ADMIN"), List.of(1L, 2L, 3L, 4L, 5L)).expectStatus().isBadRequest();
-        assertThat(REMOTE_CALLS.get()).isZero();
+        assertThat(DETAIL_CALLS.get()).isZero();
         REMOTE_STATUS.set(404);
         post(token("ADMIN"), List.of(99L)).expectStatus().isBadRequest();
         REMOTE_STATUS.set(200);
@@ -294,7 +414,7 @@ class OnClassApplicationTest {
         post(token("PERSON"), List.of(1L)).expectStatus().isForbidden();
         client.post().uri("/bootcamps").contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of()).exchange().expectStatus().isUnauthorized();
-        assertThat(REMOTE_CALLS.get()).isZero();
+        assertThat(DETAIL_CALLS.get()).isZero();
         REMOTE_STATUS.set(503);
         post(token("ADMIN"), List.of(1L)).expectStatus().isEqualTo(503);
         StepVerifier.create(repository.count()).expectNext(0L).verifyComplete();
