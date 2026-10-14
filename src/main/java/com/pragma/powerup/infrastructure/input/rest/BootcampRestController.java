@@ -6,10 +6,13 @@ import com.pragma.powerup.application.dto.request.BootcampPageRequestDto;
 import com.pragma.powerup.application.dto.response.BootcampPageResponseDto;
 import com.pragma.powerup.application.handler.IBootcampListHandler;
 import com.pragma.powerup.application.handler.IBootcampHandler;
+import com.pragma.powerup.application.handler.IEnrollmentHandler;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +30,13 @@ import reactor.core.publisher.Mono;
 public class BootcampRestController {
     private final IBootcampHandler handler;
     private final IBootcampListHandler listHandler;
+    private final IEnrollmentHandler enrollmentHandler;
+
+    @PostMapping("/{id}/enrollments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<Void> enroll(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        return enrollmentHandler.enroll(Long.valueOf(jwt.getSubject()), id);
+    }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

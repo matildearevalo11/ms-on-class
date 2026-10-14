@@ -4,9 +4,12 @@ import com.pragma.powerup.domain.exception.ValidationException;
 import com.pragma.powerup.domain.exception.ExternalServiceException;
 import com.pragma.powerup.domain.exception.ExceptionMessages;
 import com.pragma.powerup.domain.exception.NotFoundException;
+import com.pragma.powerup.domain.exception.ConflictException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,6 +21,17 @@ import org.springframework.web.bind.support.WebExchangeBindException;
 @Slf4j
 @RestControllerAdvice
 public class ControllerAdvisor {
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> conflict(ConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.from(exception.getMessage()));
+    }
+
+    @ExceptionHandler({DuplicateKeyException.class, ConcurrencyFailureException.class})
+    public ResponseEntity<ErrorResponse> concurrentEnrollment(DataAccessException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.from(ExceptionMessages.ENROLLMENT_CONFLICT.getMessage()));
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> notFound(NotFoundException exception) {
