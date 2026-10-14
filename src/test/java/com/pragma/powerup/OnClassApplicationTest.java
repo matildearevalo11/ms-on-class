@@ -295,6 +295,9 @@ class OnClassApplicationTest {
         client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
                 .exchange().expectStatus().isEqualTo(503);
         StepVerifier.create(repository.count()).expectNext(2L).verifyComplete();
+        Long associations = database.sql("SELECT COUNT(*) AS total FROM bootcamp_capacities")
+                .map((row, metadata) -> row.get("total", Long.class)).one().block();
+        assertThat(associations).isEqualTo(4L);
 
         DELETE_STATUS.set(204);
         client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))

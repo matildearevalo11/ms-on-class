@@ -26,9 +26,9 @@ public class BootcampUseCase implements IBootcampServicePort {
         return persistencePort.existsById(id)
                 .flatMap(exists -> exists
                         ? persistencePort.findExclusiveCapacityIds(id).collectList()
-                                .flatMap(capacityIds -> (capacityIds.isEmpty()
-                                        ? Mono.<Void>empty() : capacityPort.deleteCapacities(capacityIds))
-                                        .then(Mono.defer(() -> persistencePort.deleteById(id))))
+                                .flatMap(capacityIds -> persistencePort.deleteById(id)
+                                        .then(Mono.defer(() -> capacityIds.isEmpty()
+                                                ? Mono.<Void>empty() : capacityPort.deleteCapacities(capacityIds))))
                         : Mono.error(new NotFoundException(ExceptionMessages.BOOTCAMP_NOT_FOUND.getMessage())));
     }
 
