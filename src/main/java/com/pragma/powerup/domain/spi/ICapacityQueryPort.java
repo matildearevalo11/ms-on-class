@@ -8,4 +8,5 @@ import reactor.core.publisher.Mono;
 public interface ICapacityQueryPort {
     Mono<List<Long>> findExistingIds(List<Long> ids);
     Mono<Map<Long, CapacityDetail>> findDetailsByIds(List<Long> ids);
+    Mono<Void> deleteCapacities(List<Long> ids);
 }

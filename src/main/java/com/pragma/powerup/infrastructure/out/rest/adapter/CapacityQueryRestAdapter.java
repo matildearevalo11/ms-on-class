@@ -27,6 +27,20 @@ public class CapacityQueryRestAdapter implements ICapacityQueryPort {
     private final WebClient client;
     private final Duration timeout;
 
+    @Override
+    public Mono<Void> deleteCapacities(List<Long> ids) {
+        return currentJwt()
+                .flatMap(jwt -> client.delete().uri(builder -> builder.path("/capacities")
+                                .queryParam("ids", ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                                .build())
+                        .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
+                        .retrieve().toBodilessEntity())
+                .timeout(timeout)
+                .onErrorMap(error -> error instanceof WebClientException || error instanceof TimeoutException,
+                        error -> new ExternalServiceException(ExceptionMessages.CAPACITY_SERVICE_UNAVAILABLE.getMessage()))
+                .then();
+    }
+
     public CapacityQueryRestAdapter(WebClient.Builder builder,
             @Value("${services.capacity.url}") String url,
             @Value("${services.capacity.timeout}") Duration timeout) {

@@ -3,6 +3,7 @@ package com.pragma.powerup.infrastructure.exceptionhandler;
 import com.pragma.powerup.domain.exception.ValidationException;
 import com.pragma.powerup.domain.exception.ExternalServiceException;
 import com.pragma.powerup.domain.exception.ExceptionMessages;
+import com.pragma.powerup.domain.exception.NotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.dao.DataAccessException;
@@ -17,6 +18,11 @@ import org.springframework.web.bind.support.WebExchangeBindException;
 @Slf4j
 @RestControllerAdvice
 public class ControllerAdvisor {
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ErrorResponse> notFound(NotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.from(exception.getMessage()));
+    }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Void> notFound() {

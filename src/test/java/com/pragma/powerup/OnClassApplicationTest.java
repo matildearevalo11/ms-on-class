@@ -42,6 +42,10 @@ class OnClassApplicationTest {
     private static final AtomicInteger REMOTE_STATUS = new AtomicInteger(200);
     private static final AtomicInteger REMOTE_CALLS = new AtomicInteger();
     private static final AtomicInteger DETAIL_CALLS = new AtomicInteger();
+    private static final AtomicInteger DELETE_STATUS = new AtomicInteger(204);
+    private static final AtomicInteger DELETE_CALLS = new AtomicInteger();
+    private static final AtomicReference<String> DELETE_QUERY = new AtomicReference<>();
+    private static final AtomicReference<String> DELETE_AUTHORIZATION = new AtomicReference<>();
     private static final AtomicReference<String> DETAIL_AUTHORIZATION = new AtomicReference<>();
     private static final AtomicBoolean OMIT_LAST_ID = new AtomicBoolean();
     private static final AtomicReference<String> REMOTE_AUTHORIZATION = new AtomicReference<>();
@@ -86,6 +90,13 @@ class OnClassApplicationTest {
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
+            server.createContext("/api/v1/capacities", exchange -> {
+                DELETE_CALLS.incrementAndGet();
+                DELETE_QUERY.set(exchange.getRequestURI().getRawQuery());
+                DELETE_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                exchange.sendResponseHeaders(DELETE_STATUS.get(), -1);
+                exchange.close();
+            });
             server.start();
             return server;
         } catch (IOException exception) {
@@ -108,7 +119,37 @@ class OnClassApplicationTest {
         REMOTE_STATUS.set(200);
         REMOTE_CALLS.set(0);
         DETAIL_CALLS.set(0);
+        DELETE_STATUS.set(204);
+        DELETE_CALLS.set(0);
         OMIT_LAST_ID.set(false);
+    }
+
+    @Test
+    void deletesOnlyExclusiveCapacitiesAndPreservesSharedBootcampReferences() {
+        Long first = insert("Alpha", List.of(1L, 2L));
+        Long second = insert("Beta", List.of(2L, 3L));
+        String adminToken = token("ADMIN");
+
+        DELETE_STATUS.set(503);
+        client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isEqualTo(503);
+        StepVerifier.create(repository.count()).expectNext(2L).verifyComplete();
+
+        DELETE_STATUS.set(204);
+        client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isNoContent();
+        assertThat(DELETE_QUERY.get()).isEqualTo("ids=1");
+        assertThat(DELETE_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
+        StepVerifier.create(repository.count()).expectNext(1L).verifyComplete();
+
+        client.delete().uri("/bootcamps/" + second).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isNoContent();
+        assertThat(DELETE_QUERY.get()).contains("2", "3");
+        StepVerifier.create(repository.count()).expectNext(0L).verifyComplete();
+        client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isNotFound();
+        client.delete().uri("/bootcamps/1").headers(headers -> headers.setBearerAuth(token("PERSON")))
+                .exchange().expectStatus().isForbidden();
     }
 
     @Test
@@ -160,7 +201,7 @@ class OnClassApplicationTest {
         assertThat(DETAIL_CALLS.get()).isZero();
     }
 
-    private void insert(String name, List<Long> capacityIds) {
+    private Long insert(String name, List<Long> capacityIds) {
         var saved = repository.save(new BootcampEntity(null, name, "Description", LocalDate.of(2026, 11, 1), 90))
                 .block();
         assertThat(saved).isNotNull();
@@ -169,6 +210,7 @@ class OnClassApplicationTest {
                     .bind("bootcampId", saved.getId()).bind("capacityId", capacityId)
                     .fetch().rowsUpdated().block();
         }
+        return saved.getId();
     }
 
     @Test

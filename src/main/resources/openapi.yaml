@@ -8,6 +8,31 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /bootcamps/{id}:
+    delete:
+      operationId: deleteBootcamp
+      summary: Eliminar bootcamp
+      description: Elimina el bootcamp y solicita la limpieza de capacidades y tecnologías sin otras referencias. Requiere rol ADMIN.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID del bootcamp.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '204':
+          description: Bootcamp eliminado.
+        '401':
+          description: Autenticación requerida.
+        '403':
+          description: Requiere rol ADMIN.
+        '404':
+          description: Bootcamp inexistente.
+        '503':
+          description: Servicio dependiente o base de datos no disponible.
   /bootcamps:
     get:
       operationId: listBootcamps

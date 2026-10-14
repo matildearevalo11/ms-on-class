@@ -18,6 +18,12 @@ public class BootcampHandler implements IBootcampHandler {
 
     @Override
     @Transactional
+    public Mono<Void> deleteBootcamp(Long id) {
+        return servicePort.deleteBootcamp(id);
+    }
+
+    @Override
+    @Transactional
     public Mono<BootcampResponseDto> createBootcamp(BootcampRequestDto request) {
         return servicePort.createBootcamp(mapper.toModel(request)).map(mapper::toResponse);
     }
