@@ -10,6 +10,10 @@ import com.pragma.powerup.domain.usecase.BootcampUseCase;
 import com.pragma.powerup.domain.api.IEnrollmentServicePort;
 import com.pragma.powerup.domain.spi.IEnrollmentPersistencePort;
 import com.pragma.powerup.domain.usecase.EnrollmentUseCase;
+import com.pragma.powerup.domain.api.IReportDeliveryServicePort;
+import com.pragma.powerup.domain.spi.IReportDeliveryPort;
+import com.pragma.powerup.domain.spi.IReportOutboxPort;
+import com.pragma.powerup.domain.usecase.ReportDeliveryUseCase;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,7 +37,13 @@ public class BeanConfiguration {
 
     @Bean
     IBootcampServicePort bootcampServicePort(IBootcampPersistencePort persistencePort,
-            ICapacityQueryPort capacityPort) {
-        return new BootcampUseCase(persistencePort, capacityPort);
+            ICapacityQueryPort capacityPort, IReportOutboxPort outbox) {
+        return new BootcampUseCase(persistencePort, capacityPort, outbox);
+    }
+
+    @Bean
+    IReportDeliveryServicePort reportDeliveryServicePort(IReportOutboxPort outbox,
+            IReportDeliveryPort delivery) {
+        return new ReportDeliveryUseCase(outbox, delivery);
     }
 }
