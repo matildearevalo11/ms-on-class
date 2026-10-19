@@ -1,5 +1,6 @@
 package com.pragma.powerup.infrastructure.configuration;
 
+import com.pragma.powerup.infrastructure.constants.ApiPaths;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -12,6 +13,6 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 public class WebConfiguration {
     @Bean
     RouterFunction<ServerResponse> openApiResource() {
-        return RouterFunctions.resource(RequestPredicates.path("/openapi.yaml"), new ClassPathResource("openapi.yaml"));
+        return RouterFunctions.resource(RequestPredicates.path(ApiPaths.OPENAPI), new ClassPathResource(ApiPaths.OPENAPI_FILE));
     }
 }

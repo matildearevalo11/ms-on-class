@@ -1,5 +1,7 @@
 package com.pragma.powerup.infrastructure.out.rest.adapter;
 
+import com.pragma.powerup.infrastructure.constants.ApiParameters;
+import com.pragma.powerup.infrastructure.constants.ApiPaths;
 import com.pragma.powerup.domain.exception.ExceptionMessages;
 import com.pragma.powerup.domain.exception.ExternalServiceException;
 import com.pragma.powerup.domain.model.PersonSummary;
@@ -36,8 +38,8 @@ public class PersonQueryRestAdapter implements IPersonQueryPort {
         return ReactiveSecurityContextHolder.getContext()
                 .map(context -> (Jwt) context.getAuthentication().getPrincipal())
                 .switchIfEmpty(Mono.error(new ExternalServiceException(ExceptionMessages.AUTHENTICATION_REQUIRED.getMessage())))
-                .flatMap(jwt -> client.get().uri(builder -> builder.path("/persons")
-                                .queryParam("ids", ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                .flatMap(jwt -> client.get().uri(builder -> builder.path(ApiPaths.PERSONS)
+                                .queryParam(ApiParameters.IDS, ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
                                 .build())
                         .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                         .retrieve().bodyToFlux(PersonSummaryResponseDto.class).collectList())

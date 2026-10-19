@@ -40,8 +40,7 @@ public class BootcampListUseCase implements IBootcampListServicePort {
                         bootcamp.getDescription(), bootcamp.getLaunchDate(), bootcamp.getDurationDays(),
                         bootcamp.getCapacityIds().stream().map(id -> detail(capacities, id)).toList()))
                 .toList();
-        long pages = total / query.getSize() + (total % query.getSize() == 0 ? 0 : 1);
-        return new BootcampPage(items, query.getPage(), query.getSize(), total, pages);
+        return new BootcampPage(items, query.getPage(), query.getSize(), total, query.totalPages(total));
     }
 
     private CapacityDetail detail(Map<Long, CapacityDetail> capacities, Long id) {

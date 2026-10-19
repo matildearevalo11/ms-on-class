@@ -5,6 +5,8 @@ import com.pragma.powerup.application.dto.response.BootcampListItemDto;
 import com.pragma.powerup.application.dto.response.BootcampPageResponseDto;
 import com.pragma.powerup.application.dto.response.CapacityDetailDto;
 import com.pragma.powerup.application.dto.response.TechnologySummaryDto;
+import com.pragma.powerup.domain.enums.BootcampSortField;
+import com.pragma.powerup.domain.enums.SortDirection;
 import com.pragma.powerup.domain.model.BootcampPage;
 import com.pragma.powerup.domain.model.BootcampPageQuery;
 import org.springframework.stereotype.Component;
@@ -12,8 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class BootcampPageMapper {
     public BootcampPageQuery toQuery(BootcampPageRequestDto request) {
-        return new BootcampPageQuery(request.getPage(), request.getSize(), request.getSortBy(),
-                "desc".equals(request.getDirection()));
+        return new BootcampPageQuery(request.getPage(), request.getSize(),
+                BootcampSortField.fromValue(request.getSortBy()), SortDirection.fromValue(request.getDirection()));
     }
 
     public BootcampPageResponseDto toResponse(BootcampPage page) {

@@ -1,5 +1,7 @@
 package com.pragma.powerup.infrastructure.out.rest.adapter;
 
+import com.pragma.powerup.infrastructure.constants.ApiParameters;
+import com.pragma.powerup.infrastructure.constants.ApiPaths;
 import com.pragma.powerup.domain.exception.ExceptionMessages;
 import com.pragma.powerup.domain.exception.ExternalServiceException;
 import com.pragma.powerup.domain.exception.ValidationException;
@@ -30,8 +32,8 @@ public class CapacityQueryRestAdapter implements ICapacityQueryPort {
     @Override
     public Mono<Void> deleteCapacities(List<Long> ids) {
         return currentJwt()
-                .flatMap(jwt -> client.delete().uri(builder -> builder.path("/capacities")
-                                .queryParam("ids", ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                .flatMap(jwt -> client.delete().uri(builder -> builder.path(ApiPaths.CAPACITIES)
+                                .queryParam(ApiParameters.IDS, ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
                                 .build())
                         .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                         .retrieve().toBodilessEntity())
@@ -51,8 +53,8 @@ public class CapacityQueryRestAdapter implements ICapacityQueryPort {
     @Override
     public Mono<List<Long>> findExistingIds(List<Long> ids) {
         return currentJwt()
-                .flatMap(jwt -> client.get().uri(builder -> builder.path("/capacities/ids")
-                                .queryParam("ids", ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                .flatMap(jwt -> client.get().uri(builder -> builder.path(ApiPaths.CAPACITY_IDS)
+                                .queryParam(ApiParameters.IDS, ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
                                 .build())
                         .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                         .retrieve()
@@ -67,8 +69,8 @@ public class CapacityQueryRestAdapter implements ICapacityQueryPort {
     @Override
     public Mono<Map<Long, CapacityDetail>> findDetailsByIds(List<Long> ids) {
         return currentJwt()
-                .flatMap(jwt -> client.get().uri(builder -> builder.path("/capacities/details")
-                                .queryParam("ids", ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                .flatMap(jwt -> client.get().uri(builder -> builder.path(ApiPaths.CAPACITY_DETAILS)
+                                .queryParam(ApiParameters.IDS, ids.stream().map(String::valueOf).collect(Collectors.joining(",")))
                                 .build())
                         .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                         .retrieve()

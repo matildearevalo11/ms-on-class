@@ -7,6 +7,15 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ExceptionMessages {
     INVALID_REQUEST("The request body is invalid."),
+    BOOTCAMP_NAME_REQUIRED("Bootcamp name is required."),
+    BOOTCAMP_DESCRIPTION_REQUIRED("Bootcamp description is required."),
+    LAUNCH_DATE_REQUIRED("Launch date is required."),
+    DURATION_INVALID("Duration must be greater than zero."),
+    CAPACITY_COUNT_OUT_OF_RANGE("A bootcamp must have between 1 and 4 capacities."),
+    CAPACITY_ID_INVALID("Capacity ID must be positive."),
+    CAPACITIES_REPEATED("Capacities must not be repeated."),
+    INVALID_SORT_FIELD("Sort by name or capacityCount."),
+    INVALID_SORT_DIRECTION("Direction must be asc or desc."),
     CAPACITIES_NOT_FOUND("One or more capacities do not exist."),
     CAPACITY_SERVICE_UNAVAILABLE("The capacity service is unavailable."),
     CAPACITY_DETAILS_UNAVAILABLE("One or more associated capacities could not be loaded."),
