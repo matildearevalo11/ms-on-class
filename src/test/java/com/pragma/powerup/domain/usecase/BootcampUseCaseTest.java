@@ -1,5 +1,7 @@
 package com.pragma.powerup.domain.usecase;
 
+import com.pragma.powerup.domain.model.BootcampCapacityUsage;
+import com.pragma.powerup.domain.exception.ConflictException;
 import com.pragma.powerup.domain.exception.ExceptionMessages;
 import com.pragma.powerup.domain.exception.ValidationException;
 import com.pragma.powerup.domain.exception.NotFoundException;
@@ -28,9 +30,15 @@ class BootcampUseCaseTest {
         return new BootcampUseCase(persistence, capacities, outbox).deleteBootcamp(7L);
     }
 
+    private static CapacityDetail capacity(long id, long technologyId) {
+        return new CapacityDetail(id, "Capacity " + id, List.of(new TechnologySummary(technologyId, "Tech " + technologyId)));
+    }
+
     @Test
-    void deletesLocallyDiscardsPendingReportAndThenExclusiveCapacities() {
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of(1L)));
+    void deletesLocallyDiscardsPendingReportAndThenItsCapacities() {
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(1L), false)));
+        when(persistence.findCapacityIdsOfOtherBootcamps(7L)).thenReturn(Flux.just(5L));
+        when(capacities.findDetailsByIds(List.of(1L, 5L))).thenReturn(Mono.just(Map.of(1L, capacity(1, 10), 5L, capacity(5, 20))));
         when(persistence.deleteById(7L)).thenReturn(Mono.empty());
         when(capacities.deleteCapacities(List.of(1L))).thenReturn(Mono.empty());
 
@@ -42,8 +50,48 @@ class BootcampUseCaseTest {
     }
 
     @Test
-    void deletesBootcampWithoutCallingCapacityWhenAllCapacitiesAreShared() {
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of()));
+    void rejectsBootcampThatSharesCapacitiesWithoutDeletingAnything() {
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(1L, 2L), true)));
+
+        StepVerifier.create(delete())
+                .expectErrorSatisfies(error -> org.assertj.core.api.Assertions.assertThat(error)
+                        .isInstanceOf(ConflictException.class)
+                        .hasMessage(ExceptionMessages.BOOTCAMP_SHARES_CAPACITIES.getMessage()))
+                .verify();
+        verify(persistence, never()).deleteById(any());
+        verifyNoInteractions(capacities);
+    }
+
+    @Test
+    void rejectsBootcampThatSharesTechnologiesWithAnotherBootcamp() {
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(1L), false)));
+        when(persistence.findCapacityIdsOfOtherBootcamps(7L)).thenReturn(Flux.just(5L));
+        when(capacities.findDetailsByIds(List.of(1L, 5L))).thenReturn(Mono.just(Map.of(1L, capacity(1, 10), 5L, capacity(5, 10))));
+
+        StepVerifier.create(delete())
+                .expectErrorSatisfies(error -> org.assertj.core.api.Assertions.assertThat(error)
+                        .isInstanceOf(ConflictException.class)
+                        .hasMessage(ExceptionMessages.BOOTCAMP_SHARES_TECHNOLOGIES.getMessage()))
+                .verify();
+        verify(persistence, never()).deleteById(any());
+        verify(capacities, never()).deleteCapacities(any());
+    }
+
+    @Test
+    void skipsTechnologyCheckWhenNoOtherBootcampHasCapacities() {
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(1L), false)));
+        when(persistence.findCapacityIdsOfOtherBootcamps(7L)).thenReturn(Flux.empty());
+        when(persistence.deleteById(7L)).thenReturn(Mono.empty());
+        when(capacities.deleteCapacities(List.of(1L))).thenReturn(Mono.empty());
+
+        StepVerifier.create(delete()).verifyComplete();
+        verify(capacities, never()).findDetailsByIds(any());
+        verify(capacities).deleteCapacities(List.of(1L));
+    }
+
+    @Test
+    void deletesBootcampWithoutCapacitiesWithoutCallingCapacityService() {
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(), false)));
         when(persistence.deleteById(7L)).thenReturn(Mono.empty());
 
         StepVerifier.create(delete()).verifyComplete();
@@ -53,10 +101,10 @@ class BootcampUseCaseTest {
 
     @Test
     void propagatesCapacityCleanupFailureSoTheLocalDeletionIsRolledBack() {
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of(1L)));
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(1L), false)));
+        when(persistence.findCapacityIdsOfOtherBootcamps(7L)).thenReturn(Flux.empty());
         when(persistence.deleteById(7L)).thenReturn(Mono.empty());
-        when(capacities.deleteCapacities(List.of(1L)))
-                .thenReturn(Mono.error(new IllegalStateException("Unavailable")));
+        when(capacities.deleteCapacities(List.of(1L))).thenReturn(Mono.error(new IllegalStateException("Unavailable")));
 
         StepVerifier.create(delete()).expectError(IllegalStateException.class).verify();
         var order = inOrder(persistence, capacities);
@@ -66,17 +114,18 @@ class BootcampUseCaseTest {
 
     @Test
     void doesNotCallCapacityServiceWhenLocalDeletionFails() {
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of(1L)));
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.just(new BootcampCapacityUsage(List.of(1L), false)));
+        when(persistence.findCapacityIdsOfOtherBootcamps(7L)).thenReturn(Flux.empty());
         when(persistence.deleteById(7L)).thenReturn(Mono.error(new IllegalStateException("Database down")));
 
         StepVerifier.create(delete()).expectError(IllegalStateException.class).verify();
-        verifyNoInteractions(capacities);
+        verify(capacities, never()).deleteCapacities(any());
         verify(outbox, never()).discardPending(7L);
     }
 
     @Test
     void reportsMissingBootcampWithoutDeletingAnything() {
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.empty());
+        when(persistence.findCapacityUsage(7L)).thenReturn(Mono.empty());
 
         StepVerifier.create(delete()).expectError(NotFoundException.class).verify();
         verify(persistence, never()).deleteById(7L);
