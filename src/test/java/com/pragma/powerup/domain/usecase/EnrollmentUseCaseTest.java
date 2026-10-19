@@ -4,6 +4,7 @@ import com.pragma.powerup.domain.exception.ConflictException;
 import com.pragma.powerup.domain.exception.NotFoundException;
 import com.pragma.powerup.domain.model.Bootcamp;
 import com.pragma.powerup.domain.spi.IEnrollmentPersistencePort;
+import com.pragma.powerup.domain.spi.IReportOutboxPort;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -25,11 +26,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class EnrollmentUseCaseTest {
     @Mock private IEnrollmentPersistencePort persistence;
+    @Mock private IReportOutboxPort outbox;
     private EnrollmentUseCase useCase;
 
     @BeforeEach
     void setUp() {
-        useCase = new EnrollmentUseCase(persistence,
+        useCase = new EnrollmentUseCase(persistence, outbox,
                 Clock.fixed(Instant.parse("2026-10-13T00:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -39,9 +41,12 @@ class EnrollmentUseCaseTest {
         when(persistence.findBootcamp(2L)).thenReturn(Mono.just(requested));
         when(persistence.findEnrolledBootcamps(1L)).thenReturn(Flux.just(bootcamp(1L, "2026-11-01", 5)));
         when(persistence.save(1L, 2L)).thenReturn(Mono.empty());
+        when(outbox.enqueuePersonCountChange(2L)).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.enroll(1L, 2L)).verifyComplete();
-        verify(persistence).save(1L, 2L);
+        var order = org.mockito.Mockito.inOrder(persistence, outbox);
+        order.verify(persistence).save(1L, 2L);
+        order.verify(outbox).enqueuePersonCountChange(2L);
     }
 
     @Test

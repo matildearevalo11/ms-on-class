@@ -7,6 +7,7 @@ import com.pragma.powerup.domain.exception.NotFoundException;
 import com.pragma.powerup.domain.model.Bootcamp;
 import com.pragma.powerup.domain.util.ApplicationConstants;
 import com.pragma.powerup.domain.spi.IEnrollmentPersistencePort;
+import com.pragma.powerup.domain.spi.IReportOutboxPort;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class EnrollmentUseCase implements IEnrollmentServicePort {
     private final IEnrollmentPersistencePort persistencePort;
+    private final IReportOutboxPort reportOutbox;
     private final Clock clock;
 
     @Override
@@ -38,7 +40,8 @@ public class EnrollmentUseCase implements IEnrollmentServicePort {
         if (enrolled.stream().anyMatch(existing -> overlaps(existing, bootcamp))) {
             return Mono.error(new ConflictException(ExceptionMessages.ENROLLMENT_OVERLAP.getMessage()));
         }
-        return persistencePort.save(personId, bootcamp.getId());
+        return persistencePort.save(personId, bootcamp.getId())
+                .then(Mono.defer(() -> reportOutbox.enqueuePersonCountChange(bootcamp.getId())));
     }
 
     private boolean overlaps(Bootcamp first, Bootcamp second) {

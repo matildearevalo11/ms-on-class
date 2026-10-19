@@ -4,6 +4,7 @@ import com.pragma.powerup.infrastructure.constants.ApiPaths;
 import com.pragma.powerup.infrastructure.constants.SecurityConstants;
 import com.pragma.powerup.domain.spi.IReportDeliveryPort;
 import java.time.Duration;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import reactor.core.publisher.Mono;
 
 @Component
 public class ReportDeliveryRestAdapter implements IReportDeliveryPort {
+    private static final String PERSON_COUNT = "personCount";
     private final WebClient client;
     private final String internalToken;
     private final Duration timeout;
@@ -31,6 +33,15 @@ public class ReportDeliveryRestAdapter implements IReportDeliveryPort {
                 .header(SecurityConstants.INTERNAL_TOKEN_HEADER, internalToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
+                .retrieve().toBodilessEntity().timeout(timeout).then();
+    }
+
+    @Override
+    public Mono<Void> deliverPersonCount(Long bootcampId, long personCount) {
+        return client.patch().uri(ApiPaths.BOOTCAMP_REPORT_PERSON_COUNT, bootcampId)
+                .header(SecurityConstants.INTERNAL_TOKEN_HEADER, internalToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(PERSON_COUNT, personCount))
                 .retrieve().toBodilessEntity().timeout(timeout).then();
     }
 }
