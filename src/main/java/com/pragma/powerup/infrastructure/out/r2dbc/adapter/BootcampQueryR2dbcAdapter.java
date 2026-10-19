@@ -26,8 +26,7 @@ public class BootcampQueryR2dbcAdapter implements IBootcampQueryPort {
 
     @Override
     public Flux<Bootcamp> findPage(BootcampPageQuery query) {
-        long offset = (long) query.getPage() * query.getSize();
-        Flux<BootcampEntity> rows = pageRows(query, offset);
+        Flux<BootcampEntity> rows = pageRows(query);
         return rows.collectList().flatMapMany(entities -> {
             if (entities.isEmpty()) {
                 return Flux.empty();
@@ -46,12 +45,14 @@ public class BootcampQueryR2dbcAdapter implements IBootcampQueryPort {
         });
     }
 
-    private Flux<BootcampEntity> pageRows(BootcampPageQuery query, long offset) {
-        if ("name".equals(query.getSortBy())) {
-            return query.isDescending() ? repository.findPageByNameDesc(query.getSize(), offset)
-                    : repository.findPageByNameAsc(query.getSize(), offset);
-        }
-        return query.isDescending() ? repository.findPageByCapacityCountDesc(query.getSize(), offset)
-                : repository.findPageByCapacityCountAsc(query.getSize(), offset);
+    private Flux<BootcampEntity> pageRows(BootcampPageQuery query) {
+        int size = query.getSize();
+        long offset = query.offset();
+        return switch (query.getSortField()) {
+            case NAME -> query.isDescending() ? repository.findPageByNameDesc(size, offset)
+                    : repository.findPageByNameAsc(size, offset);
+            case CAPACITY_COUNT -> query.isDescending() ? repository.findPageByCapacityCountDesc(size, offset)
+                    : repository.findPageByCapacityCountAsc(size, offset);
+        };
     }
 }

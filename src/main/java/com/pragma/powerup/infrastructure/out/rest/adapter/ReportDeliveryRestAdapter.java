@@ -1,5 +1,7 @@
 package com.pragma.powerup.infrastructure.out.rest.adapter;
 
+import com.pragma.powerup.infrastructure.constants.ApiPaths;
+import com.pragma.powerup.infrastructure.constants.SecurityConstants;
 import com.pragma.powerup.domain.spi.IReportDeliveryPort;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,8 +27,8 @@ public class ReportDeliveryRestAdapter implements IReportDeliveryPort {
 
     @Override
     public Mono<Void> deliver(String payload) {
-        return client.post().uri("/internal/bootcamp-reports")
-                .header("X-Internal-Token", internalToken)
+        return client.post().uri(ApiPaths.BOOTCAMP_REPORTS)
+                .header(SecurityConstants.INTERNAL_TOKEN_HEADER, internalToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .retrieve().toBodilessEntity().timeout(timeout).then();

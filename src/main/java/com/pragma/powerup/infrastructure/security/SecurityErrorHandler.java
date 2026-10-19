@@ -1,8 +1,10 @@
 package com.pragma.powerup.infrastructure.security;
 
 import com.pragma.powerup.domain.exception.ExceptionMessages;
+import com.pragma.powerup.infrastructure.constants.SecurityConstants;
 import com.pragma.powerup.infrastructure.exceptionhandler.ErrorResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -22,7 +24,7 @@ public class SecurityErrorHandler implements ServerAuthenticationEntryPoint, Ser
 
     @Override
     public Mono<Void> commence(ServerWebExchange exchange, AuthenticationException exception) {
-        exchange.getResponse().getHeaders().set("WWW-Authenticate", "Bearer");
+        exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, SecurityConstants.BEARER);
         return write(exchange, HttpStatus.UNAUTHORIZED, ExceptionMessages.AUTHENTICATION_REQUIRED);
     }
 

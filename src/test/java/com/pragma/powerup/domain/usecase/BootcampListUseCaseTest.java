@@ -1,5 +1,7 @@
 package com.pragma.powerup.domain.usecase;
 
+import com.pragma.powerup.domain.enums.BootcampSortField;
+import com.pragma.powerup.domain.enums.SortDirection;
 import com.pragma.powerup.domain.exception.ExternalServiceException;
 import com.pragma.powerup.domain.model.Bootcamp;
 import com.pragma.powerup.domain.model.BootcampPageQuery;
@@ -21,7 +23,7 @@ class BootcampListUseCaseTest {
     void enrichesOnlyTheRequestedPageAndCalculatesTotals() {
         var bootcamps = mock(IBootcampQueryPort.class);
         var capacities = mock(ICapacityQueryPort.class);
-        var query = new BootcampPageQuery(1, 2, "capacityCount", true);
+        var query = new BootcampPageQuery(1, 2, BootcampSortField.CAPACITY_COUNT, SortDirection.DESC);
         var bootcamp = new Bootcamp(5L, "Backend", "Services", LocalDate.of(2026, 11, 1), 90,
                 List.of(1L, 2L));
         when(bootcamps.count()).thenReturn(Mono.just(3L));
@@ -44,7 +46,7 @@ class BootcampListUseCaseTest {
     void reportsMissingCapacityDetailsInsteadOfReturningAnIncompleteBootcamp() {
         var bootcamps = mock(IBootcampQueryPort.class);
         var capacities = mock(ICapacityQueryPort.class);
-        var query = new BootcampPageQuery(0, 10, "name", false);
+        var query = new BootcampPageQuery(0, 10, BootcampSortField.NAME, SortDirection.ASC);
         when(bootcamps.count()).thenReturn(Mono.just(1L));
         when(bootcamps.findPage(query)).thenReturn(Flux.just(new Bootcamp(5L, "Backend", "Services",
                 LocalDate.of(2026, 11, 1), 90, List.of(1L))));

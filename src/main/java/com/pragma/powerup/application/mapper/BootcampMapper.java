@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class BootcampMapper {
     public Bootcamp toModel(BootcampRequestDto request) {
-        return new Bootcamp(null, request.getName().strip(), request.getDescription().strip(),
+        return new Bootcamp(null, request.getName(), request.getDescription(),
                 request.getLaunchDate(), request.getDurationDays(), request.getCapacityIds());
     }
 
