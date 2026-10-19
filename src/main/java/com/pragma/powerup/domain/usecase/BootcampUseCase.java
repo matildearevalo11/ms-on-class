@@ -23,13 +23,12 @@ public class BootcampUseCase implements IBootcampServicePort {
 
     @Override
     public Mono<Void> deleteBootcamp(Long id) {
-        return persistencePort.existsById(id)
-                .flatMap(exists -> exists
-                        ? persistencePort.findExclusiveCapacityIds(id).collectList()
-                                .flatMap(capacityIds -> persistencePort.deleteById(id)
-                                        .then(Mono.defer(() -> capacityIds.isEmpty()
-                                                ? Mono.<Void>empty() : capacityPort.deleteCapacities(capacityIds))))
-                        : Mono.error(new NotFoundException(ExceptionMessages.BOOTCAMP_NOT_FOUND.getMessage())));
+        return persistencePort.findExclusiveCapacityIds(id)
+                .switchIfEmpty(Mono.error(new NotFoundException(ExceptionMessages.BOOTCAMP_NOT_FOUND.getMessage())))
+                .flatMap(capacityIds -> persistencePort.deleteById(id)
+                        .then(Mono.defer(() -> reportOutbox.discardPending(id)))
+                        .then(Mono.defer(() -> capacityIds.isEmpty()
+                                ? Mono.<Void>empty() : capacityPort.deleteCapacities(capacityIds))));
     }
 
     @Override

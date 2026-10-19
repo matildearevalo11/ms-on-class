@@ -286,6 +286,29 @@ class OnClassApplicationTest {
     }
 
     @Test
+    void discardsPendingReportOnDeletionAndKeepsItWhenDeletionRollsBack() {
+        String adminToken = token("ADMIN");
+        post(adminToken, List.of(1L)).expectStatus().isCreated();
+        Long id = database.sql("SELECT id FROM bootcamps")
+                .map((row, metadata) -> row.get("id", Long.class)).one().block();
+
+        DELETE_STATUS.set(503);
+        client.delete().uri("/bootcamps/" + id).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isEqualTo(503);
+        assertThat(pendingReports()).isEqualTo(1L);
+
+        DELETE_STATUS.set(204);
+        client.delete().uri("/bootcamps/" + id).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isNoContent();
+        assertThat(pendingReports()).isZero();
+    }
+
+    private Long pendingReports() {
+        return database.sql("SELECT COUNT(*) AS total FROM report_outbox WHERE delivered_at IS NULL")
+                .map((row, metadata) -> row.get("total", Long.class)).one().block();
+    }
+
+    @Test
     void deletesOnlyExclusiveCapacitiesAndPreservesSharedBootcampReferences() {
         Long first = insert("Alpha", List.of(1L, 2L));
         Long second = insert("Beta", List.of(2L, 3L));

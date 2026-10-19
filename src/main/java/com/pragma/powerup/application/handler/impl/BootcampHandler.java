@@ -7,6 +7,7 @@ import com.pragma.powerup.application.mapper.BootcampMapper;
 import com.pragma.powerup.domain.api.IBootcampServicePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
@@ -17,13 +18,13 @@ public class BootcampHandler implements IBootcampHandler {
     private final BootcampMapper mapper;
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public Mono<Void> deleteBootcamp(Long id) {
         return servicePort.deleteBootcamp(id);
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public Mono<BootcampResponseDto> createBootcamp(BootcampRequestDto request) {
         return servicePort.createBootcamp(mapper.toModel(request)).map(mapper::toResponse);
     }

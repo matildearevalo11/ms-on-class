@@ -18,48 +18,46 @@ import reactor.test.StepVerifier;
 import static org.mockito.Mockito.*;
 
 class BootcampUseCaseTest {
-    @Test
-    void deletesOnlyCapacitiesExclusiveToTheBootcamp() {
-        var persistence = mock(IBootcampPersistencePort.class);
-        var capacities = mock(ICapacityQueryPort.class);
-        when(persistence.existsById(7L)).thenReturn(Mono.just(true));
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Flux.just(1L));
-        when(capacities.deleteCapacities(List.of(1L))).thenReturn(Mono.empty());
-        when(persistence.deleteById(7L)).thenReturn(Mono.empty());
+    private final IBootcampPersistencePort persistence = mock(IBootcampPersistencePort.class);
+    private final ICapacityQueryPort capacities = mock(ICapacityQueryPort.class);
+    private final IReportOutboxPort outbox = mock(IReportOutboxPort.class);
 
-        StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
-                .verifyComplete();
-        var order = inOrder(persistence, capacities);
+    private Mono<Void> delete() {
+        when(outbox.discardPending(7L)).thenReturn(Mono.empty());
+        return new BootcampUseCase(persistence, capacities, outbox).deleteBootcamp(7L);
+    }
+
+    @Test
+    void deletesLocallyDiscardsPendingReportAndThenExclusiveCapacities() {
+        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of(1L)));
+        when(persistence.deleteById(7L)).thenReturn(Mono.empty());
+        when(capacities.deleteCapacities(List.of(1L))).thenReturn(Mono.empty());
+
+        StepVerifier.create(delete()).verifyComplete();
+        var order = inOrder(persistence, outbox, capacities);
         order.verify(persistence).deleteById(7L);
+        order.verify(outbox).discardPending(7L);
         order.verify(capacities).deleteCapacities(List.of(1L));
     }
 
     @Test
     void deletesBootcampWithoutCallingCapacityWhenAllCapacitiesAreShared() {
-        var persistence = mock(IBootcampPersistencePort.class);
-        var capacities = mock(ICapacityQueryPort.class);
-        when(persistence.existsById(7L)).thenReturn(Mono.just(true));
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Flux.empty());
+        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of()));
         when(persistence.deleteById(7L)).thenReturn(Mono.empty());
 
-        StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
-                .verifyComplete();
+        StepVerifier.create(delete()).verifyComplete();
         verifyNoInteractions(capacities);
         verify(persistence).deleteById(7L);
     }
 
     @Test
     void propagatesCapacityCleanupFailureSoTheLocalDeletionIsRolledBack() {
-        var persistence = mock(IBootcampPersistencePort.class);
-        var capacities = mock(ICapacityQueryPort.class);
-        when(persistence.existsById(7L)).thenReturn(Mono.just(true));
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Flux.just(1L));
+        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of(1L)));
         when(persistence.deleteById(7L)).thenReturn(Mono.empty());
         when(capacities.deleteCapacities(List.of(1L)))
                 .thenReturn(Mono.error(new IllegalStateException("Unavailable")));
 
-        StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
-                .expectError(IllegalStateException.class).verify();
+        StepVerifier.create(delete()).expectError(IllegalStateException.class).verify();
         var order = inOrder(persistence, capacities);
         order.verify(persistence).deleteById(7L);
         order.verify(capacities).deleteCapacities(List.of(1L));
@@ -67,25 +65,20 @@ class BootcampUseCaseTest {
 
     @Test
     void doesNotCallCapacityServiceWhenLocalDeletionFails() {
-        var persistence = mock(IBootcampPersistencePort.class);
-        var capacities = mock(ICapacityQueryPort.class);
-        when(persistence.existsById(7L)).thenReturn(Mono.just(true));
-        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Flux.just(1L));
+        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.just(List.of(1L)));
         when(persistence.deleteById(7L)).thenReturn(Mono.error(new IllegalStateException("Database down")));
 
-        StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
-                .expectError(IllegalStateException.class).verify();
+        StepVerifier.create(delete()).expectError(IllegalStateException.class).verify();
         verifyNoInteractions(capacities);
+        verify(outbox, never()).discardPending(7L);
     }
 
     @Test
-    void reportsMissingBootcamp() {
-        var persistence = mock(IBootcampPersistencePort.class);
-        var capacities = mock(ICapacityQueryPort.class);
-        when(persistence.existsById(7L)).thenReturn(Mono.just(false));
+    void reportsMissingBootcampWithoutDeletingAnything() {
+        when(persistence.findExclusiveCapacityIds(7L)).thenReturn(Mono.empty());
 
-        StepVerifier.create(new BootcampUseCase(persistence, capacities, mock(IReportOutboxPort.class)).deleteBootcamp(7L))
-                .expectError(NotFoundException.class).verify();
+        StepVerifier.create(delete()).expectError(NotFoundException.class).verify();
+        verify(persistence, never()).deleteById(7L);
         verifyNoInteractions(capacities);
     }
 

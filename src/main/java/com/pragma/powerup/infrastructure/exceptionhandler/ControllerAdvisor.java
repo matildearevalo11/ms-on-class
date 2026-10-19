@@ -28,9 +28,9 @@ public class ControllerAdvisor {
     }
 
     @ExceptionHandler({DuplicateKeyException.class, ConcurrencyFailureException.class})
-    public ResponseEntity<ErrorResponse> concurrentEnrollment(DataAccessException exception) {
+    public ResponseEntity<ErrorResponse> concurrentModification(DataAccessException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.from(ExceptionMessages.ENROLLMENT_CONFLICT.getMessage()));
+                .body(ErrorResponse.from(ExceptionMessages.CONCURRENT_MODIFICATION.getMessage()));
     }
 
     @ExceptionHandler(NotFoundException.class)

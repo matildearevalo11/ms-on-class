@@ -43,6 +43,12 @@ public class ReportOutboxR2dbcAdapter implements IReportOutboxPort {
                 .bind("id", id).fetch().rowsUpdated().then();
     }
 
+    @Override
+    public Mono<Void> discardPending(Long bootcampId) {
+        return database.sql("DELETE FROM report_outbox WHERE bootcamp_id = :bootcampId AND delivered_at IS NULL")
+                .bind("bootcampId", bootcampId).fetch().rowsUpdated().then();
+    }
+
     private String serialize(BootcampReportSnapshot snapshot) {
         try {
             return objectMapper.writeValueAsString(snapshot);

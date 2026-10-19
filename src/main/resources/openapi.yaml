@@ -82,6 +82,12 @@ paths:
           description: Requiere rol ADMIN.
         '404':
           description: Bootcamp inexistente.
+        '409':
+          description: El bootcamp cambió mientras se eliminaba. Reintentar.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
           description: Servicio dependiente o base de datos no disponible.
   /bootcamps:
@@ -161,6 +167,12 @@ paths:
           description: Autenticación requerida.
         '403':
           description: Requiere rol ADMIN.
+        '409':
+          description: Otra operación modificó las mismas capacidades. Reintentar.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
           description: Servicio de capacidades o base de datos no disponible.
 components:
