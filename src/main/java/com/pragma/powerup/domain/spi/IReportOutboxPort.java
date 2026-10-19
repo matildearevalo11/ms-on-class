@@ -9,4 +9,5 @@ public interface IReportOutboxPort {
     Mono<Void> enqueue(BootcampReportSnapshot snapshot);
     Flux<PendingReport> findPending(int limit);
     Mono<Void> markDelivered(Long id);
+    Mono<Void> discardPending(Long bootcampId);
 }

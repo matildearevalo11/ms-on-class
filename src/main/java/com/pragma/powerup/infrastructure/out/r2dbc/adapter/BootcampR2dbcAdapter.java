@@ -5,6 +5,8 @@ import com.pragma.powerup.domain.spi.IBootcampPersistencePort;
 import com.pragma.powerup.infrastructure.out.r2dbc.entity.BootcampEntity;
 import com.pragma.powerup.infrastructure.out.r2dbc.repository.IBootcampRepository;
 import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -17,18 +19,17 @@ public class BootcampR2dbcAdapter implements IBootcampPersistencePort {
     private final DatabaseClient database;
 
     @Override
-    public Mono<Boolean> existsById(Long id) {
-        return repository.existsById(id);
-    }
-
-    @Override
-    public Flux<Long> findExclusiveCapacityIds(Long bootcampId) {
-        return database.sql("SELECT bc.capacity_id FROM bootcamp_capacities bc "
-                        + "WHERE bc.bootcamp_id = :bootcampId AND NOT EXISTS ("
+    public Mono<List<Long>> findExclusiveCapacityIds(Long bootcampId) {
+        return database.sql("SELECT b.id, bc.capacity_id FROM bootcamps b "
+                        + "LEFT JOIN bootcamp_capacities bc ON bc.bootcamp_id = b.id AND NOT EXISTS ("
                         + "SELECT 1 FROM bootcamp_capacities other "
-                        + "WHERE other.capacity_id = bc.capacity_id AND other.bootcamp_id <> :bootcampId)")
+                        + "WHERE other.capacity_id = bc.capacity_id AND other.bootcamp_id <> b.id) "
+                        + "WHERE b.id = :bootcampId")
                 .bind("bootcampId", bootcampId)
-                .map((row, metadata) -> row.get("capacity_id", Long.class)).all();
+                .map((row, metadata) -> Optional.ofNullable(row.get("capacity_id", Long.class))).all()
+                .collectList()
+                .filter(rows -> !rows.isEmpty())
+                .map(rows -> rows.stream().flatMap(Optional::stream).toList());
     }
 
     @Override

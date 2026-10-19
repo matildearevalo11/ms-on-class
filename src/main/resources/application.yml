@@ -16,7 +16,7 @@ jwt:
 services:
   capacity:
     url: ${CAPACITY_SERVICE_URL:http://localhost:8082/api/v1}
-    timeout: ${CAPACITY_SERVICE_TIMEOUT:3s}
+    timeout: ${CAPACITY_SERVICE_TIMEOUT:8s}
   person:
     url: ${PERSON_SERVICE_URL:http://localhost:8081/api/v1}
     timeout: ${PERSON_SERVICE_TIMEOUT:3s}

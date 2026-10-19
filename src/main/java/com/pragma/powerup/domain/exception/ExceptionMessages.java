@@ -15,7 +15,7 @@ public enum ExceptionMessages {
     ALREADY_ENROLLED("The person is already enrolled in this bootcamp."),
     ENROLLMENT_OVERLAP("The bootcamp overlaps another enrollment."),
     ENROLLMENT_LIMIT("A person can have at most five current or future enrollments."),
-    ENROLLMENT_CONFLICT("The enrollment changed concurrently. Please try again."),
+    CONCURRENT_MODIFICATION("The data changed concurrently. Please try again."),
     AUTHENTICATION_REQUIRED("A valid token is required to access this resource."),
     ACCESS_DENIED("The user does not have permission to perform this action."),
     DATABASE_UNAVAILABLE("The persistence operation could not be completed."),
