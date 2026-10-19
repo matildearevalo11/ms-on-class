@@ -35,8 +35,9 @@ public class BeanConfiguration {
     }
 
     @Bean
-    IEnrollmentServicePort enrollmentServicePort(IEnrollmentPersistencePort persistencePort, Clock clock) {
-        return new EnrollmentUseCase(persistencePort, clock);
+    IEnrollmentServicePort enrollmentServicePort(IEnrollmentPersistencePort persistencePort,
+            IReportOutboxPort outbox, Clock clock) {
+        return new EnrollmentUseCase(persistencePort, outbox, clock);
     }
     @Bean
     IBootcampListServicePort bootcampListServicePort(IBootcampQueryPort bootcampPort,

@@ -56,6 +56,7 @@ class OnClassApplicationTest {
     private static final AtomicInteger REPORT_CALLS = new AtomicInteger();
     private static final AtomicReference<String> REPORT_TOKEN = new AtomicReference<>();
     private static final AtomicReference<String> REPORT_BODY = new AtomicReference<>();
+    private static final AtomicReference<String> REPORT_PATH = new AtomicReference<>();
     private static final HttpServer REMOTE = startServer();
     @Autowired
     private WebTestClient client;
@@ -135,6 +136,7 @@ class OnClassApplicationTest {
             });
             server.createContext("/api/v1/internal/bootcamp-reports", exchange -> {
                 REPORT_CALLS.incrementAndGet();
+                REPORT_PATH.set(exchange.getRequestMethod() + " " + exchange.getRequestURI().getPath());
                 REPORT_TOKEN.set(exchange.getRequestHeaders().getFirst("X-Internal-Token"));
                 REPORT_BODY.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                 exchange.sendResponseHeaders(REPORT_STATUS.get(), -1);
@@ -216,6 +218,25 @@ class OnClassApplicationTest {
         database.sql("INSERT INTO bootcamp_enrollments (bootcamp_id, person_id) VALUES (:bootcampId, :personId)")
                 .bind("bootcampId", bootcampId).bind("personId", personId)
                 .fetch().rowsUpdated().block();
+    }
+
+    @Test
+    void sendsCurrentPersonCountToReportsAfterEnrollments() {
+        String adminToken = token("ADMIN");
+        post(adminToken, List.of(1L)).expectStatus().isCreated();
+        Long id = database.sql("SELECT id FROM bootcamps")
+                .map((row, metadata) -> row.get("id", Long.class)).one().block();
+        enroll(id, token("PERSON", "11")).expectStatus().isCreated();
+        enroll(id, token("PERSON", "12")).expectStatus().isCreated();
+
+        StepVerifier.create(reportDelivery.deliverPending(10)).verifyComplete();
+
+        assertThat(REPORT_CALLS.get()).isEqualTo(2);
+        assertThat(REPORT_PATH.get()).isEqualTo("PATCH /api/v1/internal/bootcamp-reports/" + id + "/person-count");
+        assertThat(REPORT_BODY.get()).isEqualTo("{\"personCount\":2}");
+        Long pending = database.sql("SELECT COUNT(*) AS total FROM report_person_count_outbox WHERE delivered_at IS NULL")
+                .map((row, metadata) -> row.get("total", Long.class)).one().block();
+        assertThat(pending).isZero();
     }
 
     @Test

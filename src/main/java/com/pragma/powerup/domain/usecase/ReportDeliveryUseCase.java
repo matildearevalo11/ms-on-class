@@ -13,9 +13,20 @@ public class ReportDeliveryUseCase implements IReportDeliveryServicePort {
 
     @Override
     public Mono<Void> deliverPending(int limit) {
+        return deliverReports(limit).then(Mono.defer(() -> deliverPersonCounts(limit)));
+    }
+
+    private Mono<Void> deliverReports(int limit) {
         return outbox.findPending(limit)
                 .concatMap(event -> delivery.deliver(event.getPayload())
                         .then(Mono.defer(() -> outbox.markDelivered(event.getId()))))
+                .then();
+    }
+
+    private Mono<Void> deliverPersonCounts(int limit) {
+        return outbox.findPendingPersonCounts(limit)
+                .concatMap(event -> delivery.deliverPersonCount(event.getBootcampId(), event.getPersonCount())
+                        .then(Mono.defer(() -> outbox.markPersonCountDelivered(event))))
                 .then();
     }
 }
