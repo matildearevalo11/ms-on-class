@@ -21,6 +21,8 @@ public enum ExceptionMessages {
     CAPACITY_DETAILS_UNAVAILABLE("One or more associated capacities could not be loaded."),
     PERSON_DETAILS_UNAVAILABLE("One or more enrolled persons could not be loaded."),
     BOOTCAMP_NOT_FOUND("The bootcamp does not exist."),
+    BOOTCAMP_SHARES_CAPACITIES("The bootcamp shares capacities with other bootcamps and cannot be deleted."),
+    BOOTCAMP_SHARES_TECHNOLOGIES("The bootcamp shares technologies with other bootcamps and cannot be deleted."),
     ALREADY_ENROLLED("The person is already enrolled in this bootcamp."),
     ENROLLMENT_OVERLAP("The bootcamp overlaps another enrollment."),
     ENROLLMENT_LIMIT("A person can have at most five current or future enrollments."),

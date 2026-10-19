@@ -1,5 +1,6 @@
 package com.pragma.powerup;
 
+import com.pragma.powerup.domain.exception.ExceptionMessages;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
@@ -100,7 +101,8 @@ class OnClassApplicationTest {
                 }
                 String details = java.util.Arrays.stream(ids.split(","))
                         .map(id -> "{\"id\":" + id + ",\"name\":\"Capacity " + id
-                                + "\",\"technologies\":[{\"id\":7,\"name\":\"Java\"}]}")
+                                + "\",\"technologies\":[{\"id\":" + technologyOf(Long.parseLong(id))
+                                + ",\"name\":\"Java\"}]}")
                         .collect(java.util.stream.Collectors.joining(",", "[", "]"));
                 byte[] body = details.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -330,34 +332,54 @@ class OnClassApplicationTest {
     }
 
     @Test
-    void deletesOnlyExclusiveCapacitiesAndPreservesSharedBootcampReferences() {
-        Long first = insert("Alpha", List.of(1L, 2L));
-        Long second = insert("Beta", List.of(2L, 3L));
+    void rejectsDeletingBootcampsThatShareCapacitiesOrTechnologies() {
+        Long alpha = insert("Alpha", List.of(1L, 2L));
+        Long beta = insert("Beta", List.of(2L, 3L));
+        Long gamma = insert("Gamma", List.of(60L));
+        insert("Delta", List.of(61L));
+        String adminToken = token("ADMIN");
+
+        client.delete().uri("/bootcamps/" + alpha).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isEqualTo(409).expectBody().jsonPath("$.errors.message")
+                .isEqualTo(ExceptionMessages.BOOTCAMP_SHARES_CAPACITIES.getMessage());
+        client.delete().uri("/bootcamps/" + beta).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isEqualTo(409);
+        client.delete().uri("/bootcamps/" + gamma).headers(headers -> headers.setBearerAuth(adminToken))
+                .exchange().expectStatus().isEqualTo(409).expectBody().jsonPath("$.errors.message")
+                .isEqualTo(ExceptionMessages.BOOTCAMP_SHARES_TECHNOLOGIES.getMessage());
+
+        assertThat(DELETE_CALLS.get()).isZero();
+        StepVerifier.create(repository.count()).expectNext(4L).verifyComplete();
+    }
+
+    @Test
+    void deletesBootcampWithExclusiveResourcesAndRollsBackWhenCapacityFails() {
+        Long alpha = insert("Alpha", List.of(1L, 2L));
+        insert("Beta", List.of(3L));
         String adminToken = token("ADMIN");
 
         DELETE_STATUS.set(503);
-        client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
+        client.delete().uri("/bootcamps/" + alpha).headers(headers -> headers.setBearerAuth(adminToken))
                 .exchange().expectStatus().isEqualTo(503);
         StepVerifier.create(repository.count()).expectNext(2L).verifyComplete();
         Long associations = database.sql("SELECT COUNT(*) AS total FROM bootcamp_capacities")
                 .map((row, metadata) -> row.get("total", Long.class)).one().block();
-        assertThat(associations).isEqualTo(4L);
+        assertThat(associations).isEqualTo(3L);
 
         DELETE_STATUS.set(204);
-        client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
+        client.delete().uri("/bootcamps/" + alpha).headers(headers -> headers.setBearerAuth(adminToken))
                 .exchange().expectStatus().isNoContent();
-        assertThat(DELETE_QUERY.get()).isEqualTo("ids=1");
+        assertThat(DELETE_QUERY.get()).isEqualTo("ids=1,2");
         assertThat(DELETE_AUTHORIZATION.get()).isEqualTo("Bearer " + adminToken);
         StepVerifier.create(repository.count()).expectNext(1L).verifyComplete();
-
-        client.delete().uri("/bootcamps/" + second).headers(headers -> headers.setBearerAuth(adminToken))
-                .exchange().expectStatus().isNoContent();
-        assertThat(DELETE_QUERY.get()).contains("2", "3");
-        StepVerifier.create(repository.count()).expectNext(0L).verifyComplete();
-        client.delete().uri("/bootcamps/" + first).headers(headers -> headers.setBearerAuth(adminToken))
+        client.delete().uri("/bootcamps/" + alpha).headers(headers -> headers.setBearerAuth(adminToken))
                 .exchange().expectStatus().isNotFound();
         client.delete().uri("/bootcamps/1").headers(headers -> headers.setBearerAuth(token("PERSON")))
                 .exchange().expectStatus().isForbidden();
+    }
+
+    private static long technologyOf(long capacityId) {
+        return capacityId == 60L || capacityId == 61L ? 999L : capacityId + 100L;
     }
 
     @Test

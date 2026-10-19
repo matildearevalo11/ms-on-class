@@ -63,7 +63,7 @@ paths:
     delete:
       operationId: deleteBootcamp
       summary: Eliminar bootcamp
-      description: Elimina el bootcamp y solicita la limpieza de capacidades y tecnologías sin otras referencias. Requiere rol ADMIN.
+      description: Elimina el bootcamp junto con sus capacidades y tecnologías. Se rechaza con 409 si comparte capacidades o tecnologías con otro bootcamp. Requiere rol ADMIN.
       parameters:
         - name: id
           in: path
@@ -83,7 +83,7 @@ paths:
         '404':
           description: Bootcamp inexistente.
         '409':
-          description: El bootcamp cambió mientras se eliminaba. Reintentar.
+          description: El bootcamp comparte capacidades o tecnologías con otro bootcamp, o cambió mientras se eliminaba.
           content:
             application/json:
               schema:
